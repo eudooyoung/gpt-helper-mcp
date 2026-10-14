@@ -1,9 +1,9 @@
 # 개인 MCP 서버 — 설계 및 구현 인계서 (SSOT)
 
-> **상태:** 설계 5단계 완료 / 구현 6단계 착수 전  
+> **상태:** 설계 5단계 완료 / 구현 6-1 완료 · 6-2 착수 전  
 > **기준:** 2026-10-14  
 > **목적:** 다음 ChatGPT 세션과 Codex Local이 확정된 설계를 공유하고, 한 단계씩 TDD로 구현하기 위한 기준 문서  
-> **참고:** 이 문서는 구현된 기능의 설명이 아니라 **구현할 설계**를 기록한다. 실제 동작·보안 수준은 테스트 및 감사 후 판단한다.
+> **참고:** 이 문서는 향후 구현할 설계를 중심으로 기록하되, 완료된 6-1 구현 사항을 별도로 표시한다. 파일 접근 정책의 실제 보안 수준은 향후 테스트와 감사로 판단한다.
 
 ## 1. 목표와 역할
 
@@ -32,7 +32,7 @@
 - ChatGPT 커스텀 플러그인 `eudooyoung-mcp`: **Allow read actions**, 쓰기에는 사용자 승인을 요구하도록 구성.
 - 터널 인증용 환경변수 `CONTROL_PLANE_API_KEY` 사용. **키를 문서·로그·소스에 기록하지 말 것.** 최초 발급 키의 만료 기간은 7일(시험 운영용).
 
-**주의:** 위 검증은 공식 Filesystem MCP에 대한 검증이지 앞으로 작성할 `personal-mcp`의 보안 검증이 아니다.
+**주의:** 위 검증은 공식 Filesystem MCP에 대한 검증이지 개발 중인 `gpt-helper-mcp`의 보안 검증이 아니다.
 
 ## 3. MVP 범위
 
@@ -163,7 +163,7 @@ access:
 - **Zod v4**, **Vitest**, **Oxlint**, **Oxfmt**, TypeScript/`@types/node`.
 - `fs`, `path`, `crypto` 등은 Node.js 내장 모듈 우선. YAML 파서, Diff, Glob 등은 필요 시 검증된 최소 의존성 추가.
 - npm 의존성은 **정확한 버전 + `package-lock.json`** 관리. 설치 재현에는 `npm ci`.
-- `tsc`로 빌드 → `node dist/server.js` 실행. 실제 운영은 빌드 결과만 실행; 변경 시 테스트·빌드 후 재시작.
+- `npm run build` (`tsc -p tsconfig.build.json`)로 `src/`만 컴파일 → `node dist/main.js` 실행. `npm run typecheck`는 기본 `tsconfig.json`을 사용하여 `src/`와 `tests/`를 출력 없이 타입 검사한다. 실제 운영은 빌드 결과만 실행; 변경 시 테스트·빌드 후 재시작.
 - HTTP/Express/WebSocket 서버는 **도입하지 않음**. `tunnel-client`가 서버를 `mcp-command`로 시작하고 **stdio**로 통신.
 - `stdout`은 MCP 메시지 전용, 운영/진단 로그는 `stderr`.
 
@@ -171,7 +171,8 @@ access:
 
 ```text
 src/
-  server.ts          # MCP 초기화, stdio 연결
+  main.ts            # stdio 진입점 및 서버 연결
+  server.ts          # MCP 서버 생성 및 Tool 등록
   tools/             # 도구 등록·입력 검증·응답 변환
   policy/            # 경로 검증·권한·차단 규칙
   files/             # 읽기·검색·생성·수정·해시·안전 저장
@@ -180,12 +181,14 @@ src/
   audit/             # 감사 기록
 ```
 
-위 구조는 **책임 분리 예시**이며, 불필요한 추상화·파일 세분화는 구현하면서 조정 가능. MCP Tools는 파일시스템 접근을 직접 하지 않고 공통 서비스·정책을 통과해야 한다.
+현재 통합 테스트는 루트 `tests/`에 두며, `ping.test.ts`는 `InMemoryTransport`, `ping.stdio.test.ts`는 빌드된 `dist/main.js`를 자식 프로세스로 실행하는 stdio 연결을 검증한다. stdio 테스트 전에는 `npm run build`로 빌드 결과를 갱신한다.
+
+이후 모듈 디렉터리 구조는 **책임 분리 예시**이며, 불필요한 추상화·파일 세분화는 구현하면서 조정 가능. MCP Tools는 파일시스템 접근을 직접 하지 않고 공통 서비스·정책을 통과해야 한다.
 
 ## 8. 프로젝트·설정·로그 경로
 
 ```text
-~/repos/personal-mcp/                 # 개발 Git 프로젝트
+~/repos/gpt-helper-mcp/               # 개발 Git 프로젝트
 ~/tools/tunnel-client/                # 기존 터널 실행 파일
 ~/.config/personal-mcp/config.yaml    # 프로젝트 및 권한 설정
 ~/.config/tunnel-client/              # 기존 터널 프로필
@@ -214,7 +217,7 @@ src/
 |---|---|
 | 단위 | 설정 스키마, 경로·권한 정책, 해시, Diff, 미리보기 수명 |
 | 로컬 파일시스템 통합 | 임시 디렉터리에서 읽기·생성·수정·실패·권한·충돌·저장 검증 |
-| MCP 통합 | 로컬 stdio에서 도구 등록·호출·응답 검증 |
+| MCP 통합 | InMemoryTransport와 빌드된 서버의 stdio 연결에서 도구 등록·호출·응답 검증 |
 | 수동 실제 연결 | 7단계에서 OpenAI Tunnel·ChatGPT 승인·VS Code 충돌 확인 |
 
 - 테스트마다 **격리된 임시 디렉터리** 사용. 실사용 소스 트리에 파괴적 테스트 금지.
@@ -232,7 +235,9 @@ src/
 | 3 | 목록·검색·읽기 Tool | 직접 구현 고려 | 3개 Tool 및 읽기 보안 검증 |
 | 4 | 파일 생성·수정·충돌 검출·저장 | Codex | 생성·수정·실패·경쟁 테스트 통과 |
 | 5 | Preview·Diff·apply | Codex | 미리보기와 적용 내용 일치 |
-| 6 | 감사 로그·터널 연결 및 수동 테스트 | 공동 검증 | 실제 ChatGPT에서 권한·승인 검증 |
+| 6 | 감사 로그·오류 응답 및 연동 준비 | 공동 검증 | 로그·오류 처리·빌드 확인 |
+
+**6-1 구현 완료:** Node.js 24 / TypeScript ESM / MCP SDK v2 기반 `ping` Tool 및 stdio 진입점 구현. InMemory·stdio 통합 테스트, 루트 `tests/` 분리, 빌드·타입 검사 구성 분리(`tsconfig.build.json`, `tsconfig.json`). 실제 터널 연결은 아직 수행하지 않았다.
 
 담당은 세션별로 바꿀 수 있음. 사용자가 MCP 원리를 익히기 위해 초기 서버와 간단한 도구를 직접 구현할 여지 유지.
 
@@ -269,6 +274,6 @@ src/
 
 ---
 
-**다음 작업:** **6단계 첫 작업 — `~/repos/personal-mcp/` 프로젝트 초기화와 최초 stdio MCP Tool 직접 구현**을 시작할지 결정하고, 첫 번째 TDD 테스트부터 하나씩 진행한다. 아직 실제 코드는 작성하지 않았다.
+**다음 작업:** **6-2. YAML 설정 및 공통 접근 제어** — 설정 검증, 프로젝트 경계, 내장 Denylist, 심볼릭 링크 차단을 정상 경로부터 TDD로 구현한다.
 
 **참고 구현:** [공식 MCP TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk) · [공식 Filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
