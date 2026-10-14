@@ -1,9 +1,5 @@
 {
   "compilerOptions": {
-    // compile
-    "rootDir": "./src",
-    "outDir": "./dist",
-
     "module": "nodenext",
     "target": "ES2024",
     "types": ["node", "vitest", "@modelcontextprotocol/client"],
@@ -18,7 +14,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

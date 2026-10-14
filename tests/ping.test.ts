@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createServer } from "../server.js";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { createServer } from "../src/server.js";
 
 describe("ping in-memory test", () => {
   it("returns pong", async () => {
