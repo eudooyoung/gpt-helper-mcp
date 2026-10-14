@@ -1,0 +1,25 @@
+import { expect, it } from "vitest";
+import { createServer } from "../server.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+
+it("returns pong", async () => {
+  const server = createServer();
+  const client = new Client({
+    name: "test-client",
+    version: "1.0.0",
+  });
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+  try {
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    const result = await client.callTool({ name: "ping" });
+
+    expect(result.content).toEqual([{ type: "text", text: "pong" }]);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

@@ -6,7 +6,7 @@
 
     "module": "nodenext",
     "target": "ES2024",
-    "types": ["node", "vitest"],
+    "types": ["node", "vitest", "@modelcontextprotocol/client"],
 
     // type
     "strict": true,
