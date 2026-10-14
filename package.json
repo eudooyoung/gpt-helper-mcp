@@ -2,13 +2,12 @@
   "name": "gpt-helper-mcp",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint src",
-    "format": "oxfmt src",
-    "format:check": "oxfmt --check src",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
+    "lint": "oxlint src tests",
+    "format": "oxfmt src tests",
+    "format:check": "oxfmt --check src tests",
     "test": "vitest run",
     "test:watch": "vitest"
   },
