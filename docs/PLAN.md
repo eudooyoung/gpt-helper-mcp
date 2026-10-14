@@ -1,9 +1,9 @@
 # 개인 MCP 서버 — 설계 및 구현 인계서 (SSOT)
 
-> **상태:** 설계 5단계 완료 / 구현 6-1 완료 · 6-2 착수 전  
+> **상태:** 설계 5단계 완료 / 구현 6-1 완료 · 6-2 진행 중 (설정 로더·기본 스키마 구현)  
 > **기준:** 2026-10-14  
 > **목적:** 다음 ChatGPT 세션과 Codex Local이 확정된 설계를 공유하고, 한 단계씩 TDD로 구현하기 위한 기준 문서  
-> **참고:** 이 문서는 향후 구현할 설계를 중심으로 기록하되, 완료된 6-1 구현 사항을 별도로 표시한다. 파일 접근 정책의 실제 보안 수준은 향후 테스트와 감사로 판단한다.
+> **참고:** 이 문서는 향후 구현할 설계를 중심으로 기록하되, 완료된 6-1 및 진행 중인 6-2 설정 로더 구현을 구분해 표시한다. 파일 접근 정책의 실제 보안 수준은 향후 테스트와 감사로 판단한다.
 
 ## 1. 목표와 역할
 
@@ -74,7 +74,7 @@
 - 설정 수정 후 프로세스 재시작으로 반영.
 - 프로젝트의 콘텐츠 또는 모델이 보내는 경로는 신뢰하지 않는다.
 
-**설정 예시 — 필드 이름은 구현 단계에서 검증할 초안:**
+**설정 예시 — 구현된 YAML 필드:**
 
 ```yaml
 project:
@@ -90,6 +90,14 @@ access:
     - "**/secrets/**"
     - "**/private/**"
 ```
+
+**현재 구현된 설정 규칙(6-2-1):** `src/config/load.ts`는 `readFile()` → `yaml.parse()` → `configSchema.parse()` 순으로 설정을 읽고 검증한다. `Config` 타입은 `z.infer`로 추론한다.
+
+- `project.root`: 필수 절대경로 문자열.
+- `access`: 필수 객체. `writableDirectories`, `writableFiles`, `denyPatterns` 세 문자열 배열은 생략 시 각각 `[]`를 기본값으로 사용한다(`access: {}` 허용).
+- 쓰기 허용 경로 설정에는 공통 상대경로 스키마를 사용해 절대경로와 `..` 경로 요소를 거부한다. `writableDirectories: [.]`은 전체 프로젝트 쓰기 허용을 *명시적으로 요청*하는 설정이며 기본값이 아니다.
+- `denyPatterns`는 사용자 추가 패턴의 입력값만 검증한다. 내장 Denylist 및 패턴 매칭은 **미구현**이다.
+- 위 스키마는 기초 입력 검증이지 실제 파일 접근 제어가 아니다. 프로젝트 경계·실제 읽기/쓰기 권한·심볼릭 링크 차단은 Policy에서 별도로 구현한다.
 
 설정 파일 위치: `~/.config/personal-mcp/config.yaml` (프로젝트 루트 밖). 프로젝트별 `.env`를 서버 키 저장소로 사용하지 않는다.
 
@@ -161,7 +169,7 @@ access:
 - **Node.js 24**, **TypeScript + ESM**.
 - **MCP TypeScript SDK v2:** `@modelcontextprotocol/server` (v1의 `@modelcontextprotocol/sdk` 예제와 구분).
 - **Zod v4**, **Vitest**, **Oxlint**, **Oxfmt**, TypeScript/`@types/node`.
-- `fs`, `path`, `crypto` 등은 Node.js 내장 모듈 우선. YAML 파서, Diff, Glob 등은 필요 시 검증된 최소 의존성 추가.
+- `fs`, `path`, `crypto` 등은 Node.js 내장 모듈 우선. YAML 파서 `yaml@2.9.1`은 일반 의존성으로 추가했으며, Diff·Glob 등은 필요 시 검증된 최소 의존성 추가.
 - npm 의존성은 **정확한 버전 + `package-lock.json`** 관리. 설치 재현에는 `npm ci`.
 - `npm run build` (`tsc -p tsconfig.build.json`)로 `src/`만 컴파일 → `node dist/main.js` 실행. `npm run typecheck`는 기본 `tsconfig.json`을 사용하여 `src/`와 `tests/`를 출력 없이 타입 검사한다. 실제 운영은 빌드 결과만 실행; 변경 시 테스트·빌드 후 재시작.
 - HTTP/Express/WebSocket 서버는 **도입하지 않음**. `tunnel-client`가 서버를 `mcp-command`로 시작하고 **stdio**로 통신.
@@ -181,7 +189,7 @@ src/
   audit/             # 감사 기록
 ```
 
-현재 통합 테스트는 루트 `tests/`에 두며, `ping.test.ts`는 `InMemoryTransport`, `ping.stdio.test.ts`는 빌드된 `dist/main.js`를 자식 프로세스로 실행하는 stdio 연결을 검증한다. stdio 테스트 전에는 `npm run build`로 빌드 결과를 갱신한다.
+현재 테스트는 루트 `tests/`에 두며, `config.test.ts`에는 정상 2개(명시 설정·기본값), 실패 6개(자료형 3개·경로 3개)가 있다.  `ping.test.ts`는 `InMemoryTransport`, `ping.stdio.test.ts`는 빌드된 `dist/main.js`를 자식 프로세스로 실행하는 stdio 연결을 검증한다. stdio 테스트 전에는 `npm run build`로 빌드 결과를 갱신한다.
 
 이후 모듈 디렉터리 구조는 **책임 분리 예시**이며, 불필요한 추상화·파일 세분화는 구현하면서 조정 가능. MCP Tools는 파일시스템 접근을 직접 하지 않고 공통 서비스·정책을 통과해야 한다.
 
@@ -239,6 +247,8 @@ src/
 
 **6-1 구현 완료:** Node.js 24 / TypeScript ESM / MCP SDK v2 기반 `ping` Tool 및 stdio 진입점 구현. InMemory·stdio 통합 테스트, 루트 `tests/` 분리, 빌드·타입 검사 구성 분리(`tsconfig.build.json`, `tsconfig.json`). 실제 터널 연결은 아직 수행하지 않았다.
 
+**6-2 진행 현황:** 설정 로더·Zod 스키마와 `tests/config.test.ts`의 8개 테스트 구현. 사용자가 로컬 GREEN을 확인했고, GitHub 브랜치의 코드에서 테스트 입력도 재검토했다. 새 변경에 대한 전체 타입 검사·린트·빌드 결과는 별도 확인 필요. **아직 미완료:** 시작 시 설정 로드/오류 처리, 프로젝트 경계, 내장 및 사용자 Denylist, 읽기·쓰기 허용 판단, 심볼릭 링크 검사, Policy 통합 테스트.
+
 담당은 세션별로 바꿀 수 있음. 사용자가 MCP 원리를 익히기 위해 초기 서버와 간단한 도구를 직접 구현할 여지 유지.
 
 ## 12. 추후 단계
@@ -274,6 +284,6 @@ src/
 
 ---
 
-**다음 작업:** **6-2. YAML 설정 및 공통 접근 제어** — 설정 검증, 프로젝트 경계, 내장 Denylist, 심볼릭 링크 차단을 정상 경로부터 TDD로 구현한다.
+**다음 작업:** **6-2-2. 공통 프로젝트 경로 정책** — 정상적인 프로젝트 내부 상대경로 해석부터 TDD로 구현. 이후 경계 이탈·Denylist·권한·심볼릭 링크·서버 기동 연동을 순차 검증한다.
 
 **참고 구현:** [공식 MCP TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk) · [공식 Filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
