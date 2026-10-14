@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:stdio": "npm run build && vitest run src/tests/stdio.test.ts"
   },
   "keywords": [],
   "author": "",
