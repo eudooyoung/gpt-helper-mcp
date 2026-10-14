@@ -5,9 +5,12 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src",
+    "format": "oxfmt src",
+    "format:check": "oxfmt --check src",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:stdio": "npm run build && vitest run src/tests/stdio.test.ts"
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
