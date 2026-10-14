@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    // compile
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "module": "nodenext",
+    "target": "ES2024",
+    "types": ["node", "vitest", "@modelcontextprotocol/client"],
+
+    // type
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // etc
+    "sourceMap": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}
