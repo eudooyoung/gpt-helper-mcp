@@ -3,14 +3,14 @@ import { resolveProjectPath } from "../src/path/resolve.js";
 
 describe("resolveProjectPath", () => {
   describe("valid requested path", () => {
-    const requestedPaths = [{ path: "docs/PLAN.md" }, { path: "/tmp/test-project/docs/PLAN.md" }];
+    const requestedPaths = [{ path: "docs/PLAN.md" }, { path: "/tmp/my-project/docs/PLAN.md" }];
 
     it.each(requestedPaths)("resolves valid requested path: $path", ({ path }) => {
-      const root = "/tmp/test-project";
+      const root = "/tmp/my-project";
 
       const result = resolveProjectPath(root, path);
 
-      expect(result).toBe("/tmp/test-project/docs/PLAN.md");
+      expect(result).toBe("/tmp/my-project/docs/PLAN.md");
     });
   });
 
@@ -18,7 +18,7 @@ describe("resolveProjectPath", () => {
     const requestedPaths = [{ path: "../outside.txt" }, { path: "/tmp/another-project/README.md" }];
 
     it.each(requestedPaths)("rejects invalid requested path: $path", ({ path }) => {
-      const root = "/tmp/test-project";
+      const root = "/tmp/my-project";
 
       expect(() => resolveProjectPath(root, path)).toThrow();
     });
