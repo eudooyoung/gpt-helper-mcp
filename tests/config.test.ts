@@ -25,7 +25,7 @@ describe("loadConfig", () => {
           writableDirectories: 
             - docs/
           writableFiles: 
-            - README.md
+            - /tmp/test-project/README.md
           denyPatterns:
             - "**/secrets/**"
         `,
@@ -36,7 +36,7 @@ describe("loadConfig", () => {
           project: { root: "/tmp/test-project" },
           access: {
             writableDirectories: ["docs/"],
-            writableFiles: ["README.md"],
+            writableFiles: ["/tmp/test-project/README.md"],
             denyPatterns: ["**/secrets/**"],
           },
         });
@@ -51,10 +51,10 @@ describe("loadConfig", () => {
         await writeFile(
           path,
           `
-        project:
-          root: /tmp/test-project
-        access: {}
-        `,
+          project:
+            root: /tmp/test-project
+          access: {}
+          `,
         );
 
         const content = await loadConfig(path);
@@ -78,29 +78,29 @@ describe("loadConfig", () => {
         {
           name: "rejects non-string project root",
           yaml: `
-        project:
-          root: 123
-        access: {}
-        `,
+          project:
+            root: 123
+          access: {}
+          `,
         },
         {
           name: "rejects non-array writableDirectories",
           yaml: `
-        project:
-          root: "/tmp/test-project"
-        access:
-          writableDirectories: docs/
-        `,
+          project:
+            root: "/tmp/test-project"
+          access:
+            writableDirectories: docs/
+          `,
         },
         {
           name: "rejects non-string array items",
           yaml: `
-        project:
-          root: "/tmp/test-project"
-        access:
-          writableFiles: 
-          - 123
-        `,
+          project:
+            root: "/tmp/test-project"
+          access:
+            writableFiles: 
+            - 123
+          `,
         },
       ];
 
@@ -120,30 +120,40 @@ describe("loadConfig", () => {
         {
           name: "rejects relative project root",
           yaml: `
-        project:
-          root: ./test-project
-        access: {}
-        `,
+          project:
+            root: ./test-project
+          access: {}
+          `,
         },
         {
-          name: "rejects absolute writable directory",
+          name: "rejects parent directory traversing writable directory",
           yaml: `
-        project:
-          root: "/tmp/test-project"
-        access:
-          writableDirectories:
-          - /temp/other-project
-        `,
+          project:
+            root: "/tmp/test-project"
+          access:
+            writableDirectories:
+            - ../outside
+          `,
         },
         {
-          name: "rejects parent directory traversal",
+          name: "rejects absolute writable directory traversal outside",
           yaml: `
-        project:
-          root: "/tmp/test-project"
-        access:
-          writableDirectories:
-          - ../outside
-        `,
+          project:
+            root: "/tmp/test-project"
+          access:
+            writableDirectories:
+            - /temp/other-project
+          `,
+        },
+        {
+          name: "rejects empty string writable directory",
+          yaml: `
+          project:
+            root: "/tmp/test-project"
+          access:
+            writableDirectories:
+            - ""
+          `,
         },
       ];
 

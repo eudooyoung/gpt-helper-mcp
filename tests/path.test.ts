@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectPath } from "../src/policy/path.js";
+import { resolveProjectPath } from "../src/path/resolve.js";
 
 describe("resolveProjectPath", () => {
   describe("valid requested path", () => {
