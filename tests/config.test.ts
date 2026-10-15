@@ -12,23 +12,23 @@ describe("loadConfig", () => {
     return { dir, path };
   };
 
-  describe("valid congifuration", () => {
+  describe("valid configuration", () => {
     it("loads valid YAML with relative access paths", async () => {
       const { dir, path } = await createTempConfig();
       try {
         await writeFile(
           path,
           `
-        project:
-          root: /tmp/my-project
-        access:
-          writableDirectories: 
-            - docs/
-          writableFiles: 
-            - README.md
-          denyPatterns:
-            - "**/secrets/**"
-        `,
+          project:
+            root: /tmp/my-project
+          access:
+            writableDirectories: 
+              - docs/
+            writableFiles: 
+              - README.md
+            denyPatterns:
+              - "**/secrets/**"
+          `,
         );
 
         const content = await loadConfig(path);
@@ -92,7 +92,26 @@ describe("loadConfig", () => {
           `,
       },
       {
-        name: "rejects non-string array items",
+        name: "rejects non-array writableFiles",
+        yaml: `
+          project:
+            root: "/tmp/my-project"
+          access:
+            writableFiles: docs/PLAN.md
+          `,
+      },
+      {
+        name: "rejects non-string writableDirectories entry",
+        yaml: `
+          project:
+            root: "/tmp/my-project"
+          access:
+            writableDirectories: 
+            - 123
+          `,
+      },
+      {
+        name: "rejects non-string writableFiles entry",
         yaml: `
           project:
             root: "/tmp/my-project"
@@ -125,13 +144,23 @@ describe("loadConfig", () => {
           `,
       },
       {
-        name: "rejects path escaping project root",
+        name: "rejects writableDirectories path escaping project root",
         yaml: `
           project:
             root: "/tmp/my-project"
           access:
             writableDirectories:
             - ../outside
+          `,
+      },
+      {
+        name: "rejects writableFiles path escaping project root",
+        yaml: `
+          project:
+            root: "/tmp/my-project"
+          access:
+            writableFiles:
+            - ../outside.md
           `,
       },
       {
@@ -175,6 +204,38 @@ describe("loadConfig", () => {
           `,
       },
     ];
+
+    it("accepts parent traversal within project root", async () => {
+      const { dir, path } = await createTempConfig();
+      try {
+        await writeFile(
+          path,
+          `
+          project:
+            root: /tmp/my-project
+          access:
+            writableDirectories: 
+              - docs/../src/
+            writableFiles: 
+              - docs/../README.md
+            denyPatterns:
+              - "**/secrets/**"
+          `,
+        );
+
+        const content = await loadConfig(path);
+        expect(content).toEqual({
+          project: { root: "/tmp/my-project" },
+          access: {
+            writableDirectories: ["docs/../src/"],
+            writableFiles: ["docs/../README.md"],
+            denyPatterns: ["**/secrets/**"],
+          },
+        });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
 
     it.each(invalidPathConfigs)("$name", async ({ yaml }) => {
       const { dir, path } = await createTempConfig();
