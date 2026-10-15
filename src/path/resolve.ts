@@ -6,7 +6,7 @@ export const resolveProjectPath = (root: string, requestedPath: string): string 
   const isInvalidPath =
     relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath);
   if (isInvalidPath) {
-    throw new Error();
+    throw new Error("Path is outside the project root");
   }
   return path;
 };

@@ -25,11 +25,11 @@ export const configSchema = z
       for (const [index, path] of paths.entries()) {
         try {
           resolveProjectPath(root, path);
-        } catch {
+        } catch (error) {
           ctx.addIssue({
             code: "custom",
             path: ["access", field, index],
-            message: "Path outside project root",
+            message: (error as Error).message,
           });
         }
       }
