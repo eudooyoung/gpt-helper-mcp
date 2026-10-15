@@ -26,11 +26,13 @@ export const configSchema = z
         try {
           resolveProjectPath(root, path);
         } catch (error) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["access", field, index],
-            message: (error as Error).message,
-          });
+          if (error instanceof Error) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["access", field, index],
+              message: error.message,
+            });
+          }
         }
       }
     }
