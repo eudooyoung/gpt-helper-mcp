@@ -69,7 +69,7 @@
 ### 5.1 설정 기반 프로젝트 범위
 
 - MCP 실행 프로필과 **별도로** 개인 MCP 서버의 로컬 YAML 설정을 사용.
-- `project.root`만 절대경로로 등록한다. 설정의 `writableDirectories`·`writableFiles`와 MCP 도구 요청 경로는 **프로젝트 기준 상대경로만 허용**한다. `..`을 포함해도 정규화한 결과가 프로젝트 내부면 허용하며, 외부로 벗어나면 거부한다. MCP 요청에 대한 상대경로 강제는 6-2-2에서 수정 예정.
+- `project.root`만 절대경로로 등록한다. 설정의 `writableDirectories`·`writableFiles`와 MCP 도구 요청 경로는 **프로젝트 기준 상대경로만 허용**한다. `..`을 포함해도 정규화한 결과가 프로젝트 내부면 허용하며, 외부로 벗어나면 거부한다. 문자열 검사는 `resolveTargetPath()`에 반영됐으며 MCP Tools 연결은 아직이다.
 - MCP Tool을 이용한 프로젝트 등록·권한 확대 **불허**.
 - 설정 수정 후 프로세스 재시작으로 반영.
 - 프로젝트의 콘텐츠 또는 모델이 보내는 경로는 신뢰하지 않는다.
@@ -97,7 +97,7 @@ access:
 - `access`: 필수 객체. `writableDirectories`, `writableFiles`, `denyPatterns` 세 문자열 배열은 생략 시 각각 `[]`를 기본값으로 사용한다(`access: {}` 허용).
 - `writableDirectories`, `writableFiles`: 공통 `relativePathSchema`로 절대경로와 빈 문자열을 거부한다. `configSchema.superRefine()`에서 `resolveTargetPath()`를 재사용해 경계 이탈을 거부하며, 내부 `..` 경로는 허용한다. 읽은 설정 문자열은 정규화하지 않고 원형을 유지한다. `writableDirectories: [.]`은 전체 쓰기 허용을 *명시적으로 요청*하는 설정이며 기본값이 아니다.
 - `denyPatterns`는 사용자 추가 패턴의 입력값만 검증한다. 내장 Denylist 및 패턴 매칭은 **미구현**이다.
-- 설정 검증은 경로 문자열 기준이며 파일시스템 기반 접근 제어가 아니다. `src/path/resolve.ts`는 **아직 절대경로 요청을 허용**하므로, MCP 요청을 상대경로로 제한하는 6-2-2 보완이 남아 있다. 실제 읽기·쓰기 권한, Denylist, 심볼릭 링크 경유 차단은 후속 Policy/파일 접근 계층에서 검증한다.
+- 설정과 `resolveTargetPath()`의 검증은 문자열 경계에 한정된다. 실제 파일 접근 권한·Denylist·심볼릭 링크 차단은 아직 미완성이며 MCP Tools에도 연결되지 않았다.
 
 설정 파일 위치: `~/.config/personal-mcp/config.yaml` (프로젝트 루트 밖). 프로젝트별 `.env`를 서버 키 저장소로 사용하지 않는다.
 
@@ -190,7 +190,7 @@ src/
   audit/             # 감사 기록
 ```
 
-현재 테스트는 루트 `tests/`에 둔다. `config.test.ts`는 15개(정상 설정 2, 타입 실패 5, 경로 허용 1·거부 7)로, 두 쓰기 필드의 공개 입력 계약을 각각 검증한다. `path.test.ts`는 현재 4개이며 절대경로 허용 테스트를 상대경로 거부 테스트로 교체해야 한다. `access.test.ts`는 원격에 있지만 일부 테스트가 미완성으로, `rejects write outside writable directory`의 단언문이 비어 있고 프로젝트 루트 직접 쓰기 테스트도 재정리 대상이다. `ping.test.ts`는 `InMemoryTransport`, `ping.stdio.test.ts`는 빌드된 `dist/main.js`의 stdio 연결을 검증한다. stdio 테스트 전에는 `npm run build`로 빌드 결과를 갱신한다.
+현재 테스트는 루트 `tests/`에 둔다. `config.test.ts`는 15개(정상 2, 타입 실패 5, 경로 허용 1·거부 7), `path.test.ts`는 6개(유효 3·거부 3)다. `access.test.ts`는 미완성으로 단언문 누락과 이전 함수명 참조 등이 남아 있다. `ping.test.ts`/`ping.stdio.test.ts`는 InMemory/빌드된 stdio 연결을 검증한다. 실제 테스트·typecheck·lint·빌드 최신 실행 결과는 확인하지 않았다.
 
 이후 모듈 디렉터리 구조는 **책임 분리 예시**이며, 불필요한 추상화·파일 세분화는 구현하면서 조정 가능. MCP Tools는 파일시스템 접근을 직접 하지 않고 공통 서비스·정책을 통과해야 한다.
 
@@ -248,7 +248,14 @@ src/
 
 **6-1 구현 완료:** Node.js 24 / TypeScript ESM / MCP SDK v2 기반 `ping` Tool 및 stdio 진입점 구현. InMemory·stdio 통합 테스트, 루트 `tests/` 분리, 빌드·타입 검사 구성 분리(`tsconfig.build.json`, `tsconfig.json`). 실제 터널 연결은 아직 수행하지 않았다.
 
-**6-2 진행 현황:** **6-2-1 완료 및 설정 정책 보완 반영** — YAML 로더·Zod 스키마, 설정 접근 필드의 상대경로 강제·빈 값 거부, `superRefine()`의 프로젝트 경계 검사와 내부 `..` 허용. `config.test.ts` 15개가 원격에 반영됐으며 최신 실행 결과는 별도 확인하지 않았다. **6-2-2 경로 검증 구현·테스트 작성 완료(실행 검증 대기)** — `src/path/resolve.ts`의 `resolveTargetPath(root, requestedPath)`는 절대경로를 거부하고 프로젝트 내부 상대경로·내부 `..` 정규화·`.`을 허용하며, 정규화 결과가 프로젝트 밖이면 거부한다. `path.test.ts`에 유효 3개·거부 3개 테스트를 작성했고 GitHub 소스 검토를 마쳤다. 일반 `Error`를 사용하며 에러 메시지는 테스트 계약으로 고정하지 않는다. **6-2-3 진행 중** — `access.ts`·`access.test.ts`는 미완성이며 오래된 함수명 참조와 테스트 단언문 등을 6-2-3에서 정리할 예정이다. **아직 미완료:** 기본·사용자 Denylist, 서버 기동 설정 연동, 심볼릭 링크 및 실제 파일 접근 보안 검증. 최신 전체 테스트·typecheck·lint·빌드 실행 결과는 확인하지 않았다.
+**6-2 진행 현황:** 6-2-1 설정 로더·검증 완료. 6-2-2 `resolveTargetPath()` 상대경로·경계 검사와 6개 테스트 작성 및 GitHub 소스 검토 완료(실행 검증 대기). 6-2-3 `access.ts`·`access.test.ts`는 미완성. Denylist, 심볼릭 링크, MCP 연동 및 실제 파일 접근 보안 검증은 남아 있다.
+
+### 6-2-3 테스트 설계 인계 (2026-10-21)
+
+- `assertAccess()`의 권한은 `read`·`write` 두 가지. 생성·수정은 `write`이며 파일 존재 여부·충돌 등은 별도 작업 조건이다.
+- 테스트는 **권한별** `read access` / `write access`로 구성한다. 양쪽 각각에 `denylist` → `default` / `custom` 하위 그룹을 두고 모두 검증한다.
+- 기본 Denylist는 해제 불가, 사용자 패턴은 추가 차단 전용이다. 일반 파일은 쓰기 허용 디렉터리 안팎 모두 읽을 수 있으므로 읽기 허용 사례에 양쪽을 포함한다. `writableFiles`의 읽기는 별도 케이스를 추가하지 않는다.
+- **미결정:** 디렉터리 경로 자체에 대한 MCP `read`의 의미와 `list_files(".")` 같은 목록 탐색을 `assertAccess()`에서 어떻게 다룰지. Linux의 디렉터리 권한(`r/w/x`)과 MCP 정책 권한을 구분하는 논의 중이다. **이 질문부터 재개하고, 결론 전에는 테스트 케이스를 확정하지 않는다.**
 
 담당은 세션별로 바꿀 수 있음. 사용자가 MCP 원리를 익히기 위해 초기 서버와 간단한 도구를 직접 구현할 여지 유지.
 
@@ -282,9 +289,11 @@ src/
 6. Linux 명령 안내 시 **무엇을 확인/변경하며 옵션이 무엇을 뜻하는지** 설명.
 7. 확정된 요구사항과 미해결 보안 위험을 혼동하지 않음.
 8. 보안 감사에는 사용 가능한 최신 GPT 모델에서 **High 이상**의 추론 수준을 구체적으로 선정하여 실행.
+9. 테스트 설계는 **질문 하나 → 사용자 답변 → 해당 쟁점 합의** 순서로 진행한다. 사용자가 되묻거나 반론을 제기하면 새 질문으로 넘어가지 않고 해당 쟁점을 마무리한 후 이전 질문으로 돌아간다.
+10. **이미 확정된 구현에 대한 메모는 핵심 결과·검증 상태만 짧게 남기고 중복 설명하지 않는다.** 미결정 사항과 다음 작업을 우선 기록한다.
 
 ---
 
-**다음 작업:** **6-2-3 권한 및 Denylist TDD** — `access.test.ts`의 미완성 테스트와 `access.ts`의 이전 함수명 참조를 정리한 후 쓰기 권한 경계 → 기본 Denylist → 사용자 Denylist → 차단 우선순위 순서로 TDD를 진행한다. 6-2-2의 테스트 실행 및 전체 타입 검사·린트·빌드 검증은 후속 통합 검증에서 확인한다.
+**다음 작업:** **6-2-3 테스트 설계 대화 재개** — 디렉터리 경로에 대한 MCP `read` 권한의 의미(특히 `list_files`와 `assertAccess`의 관계)를 먼저 논의한다. 이후 읽기·쓰기 테스트 케이스를 한 질문씩 확정하고 구현으로 넘어간다.
 
 **참고 구현:** [공식 MCP TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk) · [공식 Filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
