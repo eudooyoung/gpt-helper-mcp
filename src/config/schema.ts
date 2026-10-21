@@ -1,6 +1,6 @@
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { resolveProjectPath } from "../path/resolve.js";
+import { resolveTargetPath } from "../path/resolve.js";
 
 export type Config = z.infer<typeof configSchema>;
 
@@ -29,13 +29,15 @@ export const configSchema = z
 
       for (const [index, path] of paths.entries()) {
         try {
-          resolveProjectPath(root, path);
-        } catch {
-          ctx.addIssue({
-            code: "custom",
-            path: ["access", field, index],
-            message: "Path outside project root",
-          });
+          resolveTargetPath(root, path);
+        } catch (error) {
+          if (error instanceof Error) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["access", field, index],
+              message: error.message,
+            });
+          }
         }
       }
     }
