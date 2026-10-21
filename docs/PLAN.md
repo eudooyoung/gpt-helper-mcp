@@ -1,9 +1,9 @@
 # 개인 MCP 서버 — 설계 및 구현 인계서 (SSOT)
 
-> **상태:** 설계 5단계 완료 / 6-1·6-2-1 완료 · 6-2-2 상대경로 전용 전환 중 · 6-2-3 테스트 설계 진행 중  
-> **기준:** 2026-10-16  
+> **상태:** 설계 5단계 완료 / 6-1·6-2-1 완료 · 6-2-2 경로 검증 구현·테스트 작성 완료(실행 검증 대기) · 6-2-3 진행 중  
+> **기준:** 2026-10-21  
 > **목적:** 다음 ChatGPT 세션과 Codex Local이 확정된 설계를 공유하고, 한 단계씩 TDD로 구현하기 위한 기준 문서  
-> **참고:** 완료된 설정 검증과 변경 중인 경로·접근 정책을 구분한다. 문자열 경계 검증은 실제 파일시스템 접근 보안 검증을 대체하지 않는다.
+> **참고:** 6-2-2의 경로 문자열 검증과 6-2-3의 미완성 접근 정책을 구분한다. 문자열 경계 검증은 실제 파일시스템 접근 보안 검증을 대체하지 않는다.
 
 ## 1. 목표와 역할
 
@@ -95,7 +95,7 @@ access:
 
 - `project.root`: 필수 절대경로 문자열.
 - `access`: 필수 객체. `writableDirectories`, `writableFiles`, `denyPatterns` 세 문자열 배열은 생략 시 각각 `[]`를 기본값으로 사용한다(`access: {}` 허용).
-- `writableDirectories`, `writableFiles`: 공통 `relativePathSchema`로 절대경로와 빈 문자열을 거부한다. `configSchema.superRefine()`에서 `resolveProjectPath()`를 재사용해 경계 이탈을 거부하며, 내부 `..` 경로는 허용한다. 읽은 설정 문자열은 정규화하지 않고 원형을 유지한다. `writableDirectories: [.]`은 전체 쓰기 허용을 *명시적으로 요청*하는 설정이며 기본값이 아니다.
+- `writableDirectories`, `writableFiles`: 공통 `relativePathSchema`로 절대경로와 빈 문자열을 거부한다. `configSchema.superRefine()`에서 `resolveTargetPath()`를 재사용해 경계 이탈을 거부하며, 내부 `..` 경로는 허용한다. 읽은 설정 문자열은 정규화하지 않고 원형을 유지한다. `writableDirectories: [.]`은 전체 쓰기 허용을 *명시적으로 요청*하는 설정이며 기본값이 아니다.
 - `denyPatterns`는 사용자 추가 패턴의 입력값만 검증한다. 내장 Denylist 및 패턴 매칭은 **미구현**이다.
 - 설정 검증은 경로 문자열 기준이며 파일시스템 기반 접근 제어가 아니다. `src/path/resolve.ts`는 **아직 절대경로 요청을 허용**하므로, MCP 요청을 상대경로로 제한하는 6-2-2 보완이 남아 있다. 실제 읽기·쓰기 권한, Denylist, 심볼릭 링크 경유 차단은 후속 Policy/파일 접근 계층에서 검증한다.
 
@@ -248,7 +248,7 @@ src/
 
 **6-1 구현 완료:** Node.js 24 / TypeScript ESM / MCP SDK v2 기반 `ping` Tool 및 stdio 진입점 구현. InMemory·stdio 통합 테스트, 루트 `tests/` 분리, 빌드·타입 검사 구성 분리(`tsconfig.build.json`, `tsconfig.json`). 실제 터널 연결은 아직 수행하지 않았다.
 
-**6-2 진행 현황:** **6-2-1 완료 및 설정 정책 보완 반영** — YAML 로더·Zod 스키마, 설정 접근 필드의 상대경로 강제·빈 값 거부, `superRefine()`의 프로젝트 경계 검사와 내부 `..` 허용. `config.test.ts` 15개가 원격에 반영되었으며 최신 실행 결과는 별도 확인하지 않았다. **6-2-2 재검토 중** — `resolveProjectPath()`의 상대경로 전용 전환 및 `path.test.ts` 수정이 남아 있다. **6-2-3 진행 중** — `access.test.ts`의 책임별 그룹 분리를 시작했으나 미완성 테스트가 포함되어 접근 제어 완료로 판단하지 않는다. **아직 미완료:** MCP 입력 경로 검증 전환, 기본·사용자 Denylist 완성, 서버 기동 설정 연동, 심볼릭 링크 및 실제 파일 접근의 보안 검증. 최신 전체 테스트·typecheck·lint·빌드 상태는 검증하지 않았다.
+**6-2 진행 현황:** **6-2-1 완료 및 설정 정책 보완 반영** — YAML 로더·Zod 스키마, 설정 접근 필드의 상대경로 강제·빈 값 거부, `superRefine()`의 프로젝트 경계 검사와 내부 `..` 허용. `config.test.ts` 15개가 원격에 반영됐으며 최신 실행 결과는 별도 확인하지 않았다. **6-2-2 경로 검증 구현·테스트 작성 완료(실행 검증 대기)** — `src/path/resolve.ts`의 `resolveTargetPath(root, requestedPath)`는 절대경로를 거부하고 프로젝트 내부 상대경로·내부 `..` 정규화·`.`을 허용하며, 정규화 결과가 프로젝트 밖이면 거부한다. `path.test.ts`에 유효 3개·거부 3개 테스트를 작성했고 GitHub 소스 검토를 마쳤다. 일반 `Error`를 사용하며 에러 메시지는 테스트 계약으로 고정하지 않는다. **6-2-3 진행 중** — `access.ts`·`access.test.ts`는 미완성이며 오래된 함수명 참조와 테스트 단언문 등을 6-2-3에서 정리할 예정이다. **아직 미완료:** 기본·사용자 Denylist, 서버 기동 설정 연동, 심볼릭 링크 및 실제 파일 접근 보안 검증. 최신 전체 테스트·typecheck·lint·빌드 실행 결과는 확인하지 않았다.
 
 담당은 세션별로 바꿀 수 있음. 사용자가 MCP 원리를 익히기 위해 초기 서버와 간단한 도구를 직접 구현할 여지 유지.
 
@@ -285,6 +285,6 @@ src/
 
 ---
 
-**다음 작업:** **6-2-2 경로 정책 수정** — `path.test.ts`에서 절대경로 거부·정규화 경계 테스트를 먼저 확정하고 `resolveProjectPath()`를 상대경로 전용으로 수정한다. 이후 `access.test.ts`의 미완성 테스트를 정리하고 6-2-3의 쓰기 권한 → 기본 Denylist → 사용자 Denylist → 차단 우선순위 순서로 TDD를 진행한다.
+**다음 작업:** **6-2-3 권한 및 Denylist TDD** — `access.test.ts`의 미완성 테스트와 `access.ts`의 이전 함수명 참조를 정리한 후 쓰기 권한 경계 → 기본 Denylist → 사용자 Denylist → 차단 우선순위 순서로 TDD를 진행한다. 6-2-2의 테스트 실행 및 전체 타입 검사·린트·빌드 검증은 후속 통합 검증에서 확인한다.
 
 **참고 구현:** [공식 MCP TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk) · [공식 Filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
