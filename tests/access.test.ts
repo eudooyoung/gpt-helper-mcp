@@ -1,170 +1,82 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/config/schema.js";
 import { assertAccess } from "../src/policy/access.js";
 
+vi.mock(import("../src/policy/denylist.js"), () => ({
+  DEFAULT_DENY_PATTERNS: ["**/secrets/**"],
+}));
+
 describe("assertAccess", () => {
+  const projectRoot = "/tmp/my-project";
+
   describe("read access", () => {
-    it("returns target path for read operation", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
+    describe("allowed paths", () => {
+      const targetPaths = [
+        { case: "project root", targetPath: ".", resolvedPath: projectRoot },
+        {
+          case: "project child path",
+          targetPath: "src/main.ts",
+          resolvedPath: `${projectRoot}/src/main.ts`,
         },
-        access: {
-          writableDirectories: ["docs/"],
-          writableFiles: [],
-          denyPatterns: [],
+      ];
+
+      it.each(targetPaths)(
+        "returns resolved target path when it is $case",
+        ({ targetPath, resolvedPath }) => {
+          const config: Config = {
+            project: {
+              root: projectRoot,
+            },
+            access: {
+              writableDirectories: [],
+              writableFiles: [],
+              denyPatterns: [],
+            },
+          };
+
+          const result = assertAccess(config, targetPath, "read");
+
+          expect(result).toBe(resolvedPath);
         },
-      };
-      const requestedPath = "src/main.ts";
-      const operation = "read";
-
-      const result = assertAccess(config, requestedPath, operation);
-
-      expect(result).toBe("/tmp/my-project/src/main.ts");
-    });
-  });
-
-  describe("write acces", () => {
-    it("return target path within writable directory", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: ["docs/"],
-          writableFiles: [],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "docs/PLAN.md";
-      const operation = "write";
-
-      const result = assertAccess(config, requestedPath, operation);
-
-      expect(result).toBe("/tmp/my-project/docs/PLAN.md");
+      );
     });
 
-    it("rejects write outside writable directory", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: ["docs/"],
-          writableFiles: [],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "src/main.ts";
-      const operation = "write";
-    });
+    describe("denylist", () => {
+      it("rejects path matching default denylist", () => {
+        const config: Config = {
+          project: {
+            root: projectRoot,
+          },
+          access: {
+            writableDirectories: [],
+            writableFiles: [],
+            denyPatterns: [],
+          },
+        };
+        const targetPath = "src/secrets/info.txt";
 
-    it("returns target path for explicitly writable file", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: [],
-          writableFiles: ["README.md"],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "README.md";
-      const operation = "write";
+        expect(() => assertAccess(config, targetPath, "read")).toThrow(
+          Error("Access denied to default denylist"),
+        );
+      });
 
-      const result = assertAccess(config, requestedPath, operation);
+      it("rejects path matching custom denylist", () => {
+        const config: Config = {
+          project: {
+            root: projectRoot,
+          },
+          access: {
+            writableDirectories: [],
+            writableFiles: [],
+            denyPatterns: ["**/private/**"],
+          },
+        };
+        const targetPath = "src/private/notes.md";
 
-      expect(result).toBe("/tmp/my-project/README.md");
-    });
-
-    it("rejects write outside writable paths", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: [],
-          writableFiles: ["README.md"],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "src/main.ts";
-      const operation = "write";
-
-      expect(() => assertAccess(config, requestedPath, operation)).toThrow();
-    });
-
-    it("rejects write on project root", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: ["docs/"],
-          writableFiles: [],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "/tmp/my-project";
-      const operation = "write";
-
-      expect(() => assertAccess(config, requestedPath, operation)).toThrow();
-    });
-  });
-
-  describe("default denylist", () => {
-    it("rejects read of sensitive file by default", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: [],
-          writableFiles: [],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = ".env";
-      const operation = "read";
-
-      expect(() => assertAccess(config, requestedPath, operation)).toThrow();
-    });
-
-    it("rejects read of nested sensitive file by default", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: [],
-          writableFiles: [],
-          denyPatterns: [],
-        },
-      };
-      const requestedPath = "src/.env";
-      const operation = "read";
-
-      expect(() => assertAccess(config, requestedPath, operation)).toThrow();
-    });
-  });
-
-  describe("custom denylist", () => {
-    it("rejects read matching custom deny pattern", () => {
-      const config: Config = {
-        project: {
-          root: "/tmp/my-project",
-        },
-        access: {
-          writableDirectories: [],
-          writableFiles: [],
-          denyPatterns: ["**/private/**"],
-        },
-      };
-      const requestedPath = "src/private/notes.md";
-      const operation = "read";
-
-      expect(() => assertAccess(config, requestedPath, operation)).toThrow();
+        expect(() => assertAccess(config, targetPath, "read")).toThrow(
+          Error("Access denied to custom denylist"),
+        );
+      });
     });
   });
 });

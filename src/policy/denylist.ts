@@ -1,1 +1,1 @@
-export const DEFAULT_DENY_PATTERNS = [".env"] as const;
+export const DEFAULT_DENY_PATTERNS: readonly string[] = ["**/.env"];
