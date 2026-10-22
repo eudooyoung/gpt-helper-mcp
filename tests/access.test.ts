@@ -3,7 +3,7 @@ import type { Config } from "../src/config/schema.js";
 import { assertAccess } from "../src/policy/access.js";
 
 vi.mock(import("../src/policy/denylist.js"), () => ({
-  DEFAULT_DENY_PATTERNS: ["**/secrets/**"],
+  DEFAULT_DENY_PATTERNS: ["**/secrets/"],
 }));
 
 describe("assertAccess", () => {
@@ -56,7 +56,7 @@ describe("assertAccess", () => {
         const targetPath = "src/secrets/info.txt";
 
         expect(() => assertAccess(config, targetPath, "read")).toThrow(
-          Error("Access denied to default denylist"),
+          Error("Access denied to denylist"),
         );
       });
 
@@ -68,13 +68,13 @@ describe("assertAccess", () => {
           access: {
             writableDirectories: [],
             writableFiles: [],
-            denyPatterns: ["**/private/**"],
+            denyPatterns: ["**/private/"],
           },
         };
         const targetPath = "src/private/notes.md";
 
         expect(() => assertAccess(config, targetPath, "read")).toThrow(
-          Error("Access denied to custom denylist"),
+          Error("Access denied to denylist"),
         );
       });
     });

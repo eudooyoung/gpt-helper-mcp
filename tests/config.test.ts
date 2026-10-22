@@ -27,7 +27,7 @@ describe("loadConfig", () => {
             writableFiles: 
               - README.md
             denyPatterns:
-              - "**/secrets/**"
+              - "**/secrets/"
           `,
         );
 
@@ -37,7 +37,7 @@ describe("loadConfig", () => {
           access: {
             writableDirectories: ["docs/"],
             writableFiles: ["README.md"],
-            denyPatterns: ["**/secrets/**"],
+            denyPatterns: ["**/secrets/"],
           },
         });
       } finally {

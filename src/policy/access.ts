@@ -9,18 +9,23 @@ export const assertAccess = (config: Config, targetPath: string, operation: Oper
   const { root } = config.project;
   const resolvedTargetPath = resolveTargetPath(root, targetPath);
   const relativeTargetPath = relative(root, resolvedTargetPath);
+  const dirs = relativeTargetPath.split("/");
 
-  for (const pattern of DEFAULT_DENY_PATTERNS) {
-    if (matchesGlob(relativeTargetPath, pattern)) {
-      throw Error("Access denied to default denylist");
-    }
-  }
-
+  let currentDir = "";
   const { denyPatterns } = config.access;
 
-  for (const pattern of denyPatterns) {
-    if (matchesGlob(relativeTargetPath, pattern)) {
-      throw Error("Access denied to custom denylist");
+  for (const dir of dirs) {
+    currentDir += `${dir}/`;
+    for (const pattern of DEFAULT_DENY_PATTERNS) {
+      if (matchesGlob(currentDir, pattern)) {
+        throw Error("Access denied to denylist");
+      }
+    }
+
+    for (const pattern of denyPatterns) {
+      if (matchesGlob(currentDir, pattern)) {
+        throw Error("Access denied to denylist");
+      }
     }
   }
 
