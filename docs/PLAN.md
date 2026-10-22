@@ -87,8 +87,8 @@ access:
     - AGENTS.md
     - README.md
   denyPatterns:
-    - "**/secrets/**"
-    - "**/private/**"
+    - "**/secrets/"
+    - "**/private/"
 ```
 
 **현재 구현된 설정 검증(6-2-1 및 보완):** `src/config/load.ts`는 `readFile()` → `yaml.parse()` → `configSchema.parse()` 순으로 설정을 읽고 검증한다. `Config` 타입은 `z.infer`로 추론한다.
@@ -96,7 +96,7 @@ access:
 - `project.root`: 필수 절대경로 문자열.
 - `access`: 필수 객체. `writableDirectories`, `writableFiles`, `denyPatterns` 세 문자열 배열은 생략 시 각각 `[]`를 기본값으로 사용한다(`access: {}` 허용).
 - `writableDirectories`, `writableFiles`: 공통 `relativePathSchema`로 절대경로와 빈 문자열을 거부한다. `configSchema.superRefine()`에서 `resolveTargetPath()`를 재사용해 경계 이탈을 거부하며, 내부 `..` 경로는 허용한다. 읽은 설정 문자열은 정규화하지 않고 원형을 유지한다. `writableDirectories: [.]`은 전체 쓰기 허용을 *명시적으로 요청*하는 설정이며 기본값이 아니다.
-- `denyPatterns`는 사용자 Glob 문자열 목록으로 설정한다. `assertAccess()`는 `resolveTargetPath()`로 정규화한 뒤 프로젝트 상대경로로 변환하여 Default 및 Custom Denylist에 동일한 `node:path.matchesGlob()` 매칭을 적용한다. `read` 정상·차단 경로의 코드와 테스트는 작성했지만 실제 실행 결과는 아직 확인하지 않았다.
+- `denyPatterns`는 사용자 Glob 문자열 목록으로 설정한다. `assertAccess()`는 `resolveTargetPath()`로 정규화한 뒤 프로젝트 상대경로로 변환하고, `/`로 분할한 각 누적 경로(예: `src/` → `src/secrets/`)를 Default/Custom Denylist에 `node:path.matchesGlob()`으로 검사한다. 일치 즉시 접근을 거부하여 차단된 디렉터리의 하위 경로도 차단한다. `read` 코드·테스트 작성 후 GitHub 검토까지 진행했으나 실제 실행 결과는 아직 확인하지 않았다.
 - `write` 접근 판단, 심볼릭 링크 차단, 실제 파일시스템 접근 제어 및 MCP Tools 연동은 미완성이다. `assertAccess()`의 현재 `write` 동작을 허용 정책 구현 완료로 간주하지 않는다.
 
 설정 파일 위치: `~/.config/personal-mcp/config.yaml` (프로젝트 루트 밖). 프로젝트별 `.env`를 서버 키 저장소로 사용하지 않는다.
@@ -115,7 +115,7 @@ access:
 | 심볼릭 링크 경유 경로 | X | X | X |
 
 - 기본 Denylist를 내장하고 사용자 설정에서는 **차단 규칙 추가만** 허용한다. 6-2-3의 임시 내장 패턴은 `**/.env`이며(루트·하위 경로의 `.env` 대상), **최종 기본 차단 목록 선정은 후속 결정**이다. 이번 논의에서는 `.env.*`, `.git/**`를 기본 목록에 추가할 필요가 없다는 의견을 확인했다.
-- 기본·사용자 규칙은 모두 정규화된 **프로젝트 상대경로**에 Glob을 적용한다. 사용자 `denyPatterns`는 입력한 패턴 그대로 사용하며 임의로 확장하지 않는다. 예컨대 `**/secrets/**`는 `src/secrets/file.txt`에는 매칭되지만 `src/secrets` 자체에는 매칭되지 않는다. 디렉터리 이름까지 숨기려면 디렉터리 자체에 매칭되는 규칙도 필요하므로 6-3 목록·검색 Tool에서 해당 정책을 검증한다.
+- 기본·사용자 규칙은 모두 정규화된 **프로젝트 상대경로**에 Glob을 적용하며, 사용자 `denyPatterns`는 입력한 패턴 그대로 사용한다. **디렉터리 차단 표기 `**/secrets/`**는 `src/secrets/` 경로와 일치하면 해당 경로 및 하위 경로를 모두 차단하는 정책이다. 이를 위해 요청 경로의 각 상위 접두 경로를 순서대로 검사하고 최초 일치 시 거부한다. 차단된 디렉터리는 `list_files` 결과에서 이름도 숨기며 실제 Tool 통합 검증은 6-3에서 수행한다. 일반 파일 패턴의 마지막 경로 처리 및 프로젝트 루트 `.` 처리의 경계 테스트는 별도로 남아 있다.
 - `assertAccess()`는 정규화된 요청 경로의 정책상 허용 여부만 판단하며, 파일·디렉터리 유형과 존재 여부는 개별 Tool이 검증한다. `list_files`는 요청 디렉터리를 검사하고, 반환할 항목 각각에 차단 정책을 적용하여 차단된 이름도 숨긴다. Denylist에 해당하지 않는 `.vscode` 등 숨김 경로는 이름이 `.`으로 시작한다는 이유만으로 숨기지 않는다.
 - 목록·검색·읽기 모두 차단 정책 적용. **검색은 민감 파일을 먼저 제외하고 검색해야** 파일 내용이 검색 도구나 결과에 섞이지 않는다.
 - `.gitignore`는 성능상 탐색 범위 조정에 참고할 수 있지만 보안 정책을 대신하지 않는다.
@@ -251,14 +251,16 @@ src/
 
 **6-2 진행 현황:** 6-2-1 설정 로더·검증 완료. 6-2-2 `resolveTargetPath()` 경계 검증과 테스트 6개 작성·GitHub 검토 완료(실행 검증 대기). 6-2-3 `read access` 정상 경로·Denylist 차단 테스트 4개와 코드 작성·GitHub 재검토 완료(실행 검증 대기); `write access` 미구현. 심볼릭 링크, MCP 연동, 실제 파일 접근 보안 검증은 남아 있다.
 
-### 6-2-3 테스트 설계·구현 인계 (2026-10-22, `read` 작성 완료·실행 미확인)
+### 6-2-3 테스트 설계·구현 인계 (2026-10-22, `read` 코드·테스트 작성 / 경계 테스트 미완료)
 
-- `assertAccess()`의 권한은 `read`·`write` 두 가지. 경로 접근 정책만 판단하며 파일·디렉터리 유형과 존재 여부는 Tool 책임. 생성·수정은 `write`이며 실제 저장·충돌 처리는 후속 단계의 책임이다.
-- **`read access` 정상 경로:** `.`(프로젝트 루트)와 `src/main.ts`(프로젝트 내부 하위 경로) 각각 읽기 허용 및 절대경로 반환을 검증한다. 파일·디렉터리를 별개 분기로 테스트하지 않는다. 테스트 설정의 `writableDirectories`·`writableFiles`는 빈 배열로 유지한다.
-- **Denylist 차단 테스트:** Default 패턴 `**/secrets/**`를 Mock하고 `src/secrets/info.txt` 요청의 거부를 검사한다. Custom `denyPatterns: ["**/private/**"]`에서 `src/private/notes.md`의 거부를 검사한다. Denylist 불일치 시 허용 테스트 및 Default·Custom 조합 테스트는 이번 범위에서 제외한다.
-- **현재 구현:** `resolveTargetPath()`로 경계 확인·정규화 → `relative(root, resolvedTargetPath)`로 프로젝트 상대경로 계산 → Default/Custom 모두 `matchesGlob()` 적용. 임시 실제 Default 패턴은 `**/.env`. 테스트의 Mock과 실제 내장 목록의 동작은 구분한다.
-- **미확인:** Vitest·타입 검사·린트·빌드의 최신 실행 결과, 완성된 기본 Denylist 목록, 디렉터리 경로 자체 매칭, `write access`, 심볼릭 링크와 Tool 연동. `list_files(".")`는 허용하고, 차단 경로는 이름도 누출하지 않으며, 차단되지 않은 숨김 경로는 보이는 정책을 6-3에서 검증한다.
-- **다음:** `write access` 정상 경로부터 테스트를 설계하고, 차단 및 정책 우선순위 검증으로 진행한다.
+- `assertAccess()`는 정책상 경로 접근만 판단한다. 파일·디렉터리 유형과 존재 여부는 Tool 책임이다. `read`·`write`를 입력받지만 쓰기 허용 범위 판단은 아직 구현하지 않았으며, 현재 `write`를 Tool에 연결해서는 안 된다.
+- **`read access` 정상 경로:** `.`(프로젝트 루트)와 `src/main.ts`(하위 경로) 각각 허용 및 절대경로 반환을 검증한다. 파일·디렉터리 유형별로 나누지 않고, 쓰기 설정 배열도 비운다.
+- **Denylist 테스트:** Default는 `**/secrets/`를 Mock하여 `src/secrets/info.txt`의 차단을 검사하고, Custom은 `**/private/`로 `src/private/notes.md` 차단을 검사한다. 총 4개 읽기 테스트(정상 2개, 차단 2개) 작성. 불일치 허용과 조합 테스트는 이번 범위에서 제외한다.
+- **코드 변경:** `resolveTargetPath()` → `relative(root, ...)` → `split("/")` 후 누적 접두 경로에 `/`를 붙여 Default·Custom 모두 `matchesGlob()` 검사. 차단 디렉터리를 만나면 즉시 거부하여 하위 접근을 막는다. 임시 실제 Default 패턴은 `**/.env`; 최종 목록은 별도 결정한다.
+- **남은 TDD 경계 확인:** `.`은 상대경로가 빈 문자열인데 현재 루프에서 `/`로 변환된다. 또한 마지막 경로 토큰에도 `/`를 붙여 파일 패턴과 비교한다. 두 동작은 각각 기존 테스트가 직접 정의하지 않은 계약이므로 독립 테스트 설계 → RED/GREEN → 필요한 최소 구현 순서로 검증한다. 이는 현재 동작의 실패가 입증됐다는 의미는 아니다.
+- **미확인:** Vitest·타입 검사·린트·빌드 최신 실행 결과, 상위 디렉터리 자체 차단과 숨김 처리의 실제 Tool 검증, 완성된 기본 Denylist, `write access`, 심볼릭 링크·MCP 연동.
+- **다음:** 위 두 경계 테스트를 마친 뒤 `write access` 정상 경로 테스트를 처음부터 설계한다.
+
 담당은 세션별로 바꿀 수 있음. 사용자가 MCP 원리를 익히기 위해 초기 서버와 간단한 도구를 직접 구현할 여지 유지.
 
 ## 12. 추후 단계
