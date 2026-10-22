@@ -1,10 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.js";
 import { assertAccess } from "../src/policy/access.js";
-
-vi.mock(import("../src/policy/denylist.js"), () => ({
-  DEFAULT_DENY_PATTERNS: ["**/secrets/"],
-}));
 
 describe("assertAccess", () => {
   const projectRoot = "/tmp/my-project";
@@ -42,7 +38,12 @@ describe("assertAccess", () => {
     });
 
     describe("denylist", () => {
-      it("rejects path matching default denylist", () => {
+      const patterns = [
+        { case: "default denylist", denyPatterns: [], targetPath: ".env" },
+        { case: "custom denylist", denyPatterns: ["**/private/"], targetPath: "private/note.txt" },
+      ];
+
+      it.each(patterns)("rejects path matching $case", ({ denyPatterns, targetPath }) => {
         const config: Config = {
           project: {
             root: projectRoot,
@@ -50,17 +51,16 @@ describe("assertAccess", () => {
           access: {
             writableDirectories: [],
             writableFiles: [],
-            denyPatterns: [],
+            denyPatterns,
           },
         };
-        const targetPath = "src/secrets/info.txt";
 
         expect(() => assertAccess(config, targetPath, "read")).toThrow(
-          Error("Access denied to denylist"),
+          new Error("Access denied to denylist"),
         );
       });
 
-      it("rejects path matching custom denylist", () => {
+      it("doesn't apply denylist to project root", () => {
         const config: Config = {
           project: {
             root: projectRoot,
@@ -68,14 +68,14 @@ describe("assertAccess", () => {
           access: {
             writableDirectories: [],
             writableFiles: [],
-            denyPatterns: ["**/private/"],
+            denyPatterns: ["/"],
           },
         };
-        const targetPath = "src/private/notes.md";
+        const targetPath = ".";
 
-        expect(() => assertAccess(config, targetPath, "read")).toThrow(
-          Error("Access denied to denylist"),
-        );
+        const result = assertAccess(config, targetPath, "read");
+
+        expect(result).toBe(projectRoot);
       });
     });
   });
